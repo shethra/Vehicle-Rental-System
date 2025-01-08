@@ -86,7 +86,7 @@ public:
     static ReservationSystem& getInstance() { 
         std::lock_guard<std::mutex> lock(instanceMutex); 
         if (!instance) { 
-            instance = std::make_unique<ReservationSystem>(); 
+            instance.reset(new ReservationSystem()); 
         } 
         return *instance; 
 } 
