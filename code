@@ -1,155 +1,172 @@
-#include <iostream> 
-#include <memory> 
-#include <map> 
-#include <string> 
-#include <mutex> 
+#include <iostream>
+#include <string>
+#include <memory>
+#include <map>
+#include <mutex>
+#include <vector>
 #include <stdexcept>
-#include <vector> 
+#include <thread>
+#include <functional>
 
-// Abstract Base Class for Vehicle 
-class Vehicle { 
-protected: 
-    std::string licensePlate; 
-    double baseRate; // Base rental rate 
-public: 
+// Abstract Base Class for Vehicle
+class Vehicle {
+protected:
+    std::string licensePlate;
+    double baseRate;
+
+public:
     Vehicle(const std::string& license, double rate) 
-        : licensePlate(license), baseRate(rate) {} 
-    virtual ~Vehicle() = default; 
-    
-    virtual double calculateRentalFee(int duration) const = 0; // Pure virtual function 
-    std::string getLicensePlate() const { return licensePlate; } 
-}; 
+        : licensePlate(license), baseRate(rate) {}
 
-// Subclasses for Car and Truck 
-class Car : public Vehicle { 
+    virtual ~Vehicle() = default;
+
+    virtual double calculateRentalFee(int duration, const std::string& rateType) const = 0;
+
+    std::string getLicensePlate() const { return licensePlate; }
+};
+
+// Subclasses for Car and Truck
+class Car : public Vehicle {
 public:
-    Car(const std::string& license, double rate) : Vehicle(license, rate) {} 
-    double calculateRentalFee(int duration) const override { 
-        return baseRate * duration; // Daily rental rate 
-    } 
-}; 
+    Car(const std::string& license, double rate) : Vehicle(license, rate) {}
 
-class Truck : public Vehicle { 
-public: 
-    Truck(const std::string& license, double rate) : Vehicle(license, rate) {} 
-    double calculateRentalFee(int duration) const override { 
-        return baseRate * 1.5 * duration; // Higher rate for trucks 
-    } 
-}; 
+    double calculateRentalFee(int duration, const std::string& rateType) const override {
+        if (rateType == "hourly") return baseRate * duration / 24;
+        if (rateType == "daily") return baseRate * duration;
+        if (rateType == "weekly") return baseRate * (duration / 7);
+        throw std::invalid_argument("Invalid rate type");
+    }
+};
 
-// Factory for Vehicle Creation 
-class VehicleFactory { 
-public: 
-    static std::unique_ptr<Vehicle> createVehicle(const std::string& type, 
-                                                  const std::string& license, 
-                                                  double rate) { 
-        if (type == "Car") { 
-            return std::make_unique<Car>(license, rate); 
-        } 
-        else if (type == "Truck") { 
-            return std::make_unique<Truck>(license, rate); 
-        } 
-        throw 
-            std::invalid_argument("Invalid vehicle type"); 
-    } 
-}; 
-
-// Rental Class 
-class Rental { 
-    std::string customerName; 
-    std::unique_ptr<Vehicle> vehicle; 
-    int rentalDuration; // Duration in days 
-    double totalFee; 
-
+class Truck : public Vehicle {
 public:
-    Rental(const std::string& name, std::unique_ptr<Vehicle> veh, int duration) 
-        : customerName(name), vehicle(std::move(veh)), rentalDuration(duration) { 
-        totalFee = vehicle->calculateRentalFee(duration); 
-    } 
+    Truck(const std::string& license, double rate) : Vehicle(license, rate) {}
 
-    void printRentalDetails() const { 
-        std::cout << "Customer: " << customerName << "\n" 
-                  << "Vehicle: " << vehicle->getLicensePlate() << "\n" 
-                  << "Duration: " << rentalDuration << " days\n" 
-                  << "Total Fee: $" << totalFee << "\n"; 
-    } 
-}; 
+    double calculateRentalFee(int duration, const std::string& rateType) const override {
+        double multiplier = 1.5; // Higher rate for trucks
+        if (rateType == "hourly") return baseRate * multiplier * duration / 24;
+        if (rateType == "daily") return baseRate * multiplier * duration;
+        if (rateType == "weekly") return baseRate * multiplier * (duration / 7);
+        throw std::invalid_argument("Invalid rate type");
+    }
+};
 
-// Singleton Reservation System 
-class ReservationSystem { 
-    std::map<std::string, bool> vehicleInventory; // License Plate -> Availability 
-    std::vector<std::shared_ptr<Rental>> rentals; 
-    std::mutex systemMutex; // For thread safety 
-    static std::unique_ptr<ReservationSystem> instance; 
-  	static std::mutex instanceMutex; 
+// Factory Pattern to Create Vehicles
+class VehicleFactory {
+public:
+    static std::unique_ptr<Vehicle> createVehicle(const std::string& type, const std::string& license, double rate) {
+        if (type == "Car") return std::make_unique<Car>(license, rate);
+        if (type == "Truck") return std::make_unique<Truck>(license, rate);
+        throw std::invalid_argument("Invalid vehicle type");
+    }
+};
 
-    ReservationSystem() = default; 
+// Rental Class
+class Rental {
+    std::string customerName;
+    std::unique_ptr<Vehicle> vehicle;
+    int rentalDuration;
+    double totalFee;
+    std::string rateType;
 
 public:
-    static ReservationSystem& getInstance() { 
-        std::lock_guard<std::mutex> lock(instanceMutex); 
-        if (!instance) { 
-            instance.reset(new ReservationSystem()); 
-        } 
-        return *instance;  
-} 
+    Rental(const std::string& name, std::unique_ptr<Vehicle> veh, int duration, const std::string& rateType) 
+        : customerName(name), vehicle(std::move(veh)), rentalDuration(duration), rateType(rateType) {
+        totalFee = vehicle->calculateRentalFee(duration, rateType);
+    }
+
+    void printRentalDetails() const {
+        std::cout << "Customer: " << customerName << "\n"
+                  << "Vehicle: " << vehicle->getLicensePlate() << "\n"
+                  << "Duration: " << rentalDuration << " days\n"
+                  << "Rate Type: " << rateType << "\n"
+                  << "Total Fee: $" << totalFee << "\n";
+    }
+};
+
+// Singleton Reservation System
+class ReservationSystem {
+    std::map<std::string, bool> vehicleInventory; // Vehicle availability
+    std::vector<std::shared_ptr<Rental>> rentals;
+    std::mutex systemMutex; // Thread safety
+    static std::unique_ptr<ReservationSystem> instance;
+    static std::mutex instanceMutex;
+
+    ReservationSystem() = default;
+
+public:
+    static ReservationSystem& getInstance() {
+        std::lock_guard<std::mutex> lock(instanceMutex);
+        if (!instance) instance = std::make_unique<ReservationSystem>();
+        return *instance;
+    }
 
     void addVehicle(const std::string& license) {
-        std::lock_guard<std::mutex> lock(systemMutex); 
-        vehicleInventory[license] = true; // Available 
-    } 
+        std::lock_guard<std::mutex> lock(systemMutex);
+        vehicleInventory[license] = true;
+    }
 
-    void bookVehicle(const std::string& customerName, const std::string& type, 
-                      const std::string& license, int duration, double rate) {
-        std::lock_guard<std::mutex> lock(systemMutex); 
-        if (!vehicleInventory[license]) { 
-            throw std::runtime_error("Vehicle is already booked"); 
-        } 
-        auto vehicle = VehicleFactory::createVehicle(type, license, rate); 
-        auto rental = std::make_shared<Rental>(customerName, std::move(vehicle), duration); 
-        rentals.push_back(rental); 
-        vehicleInventory[license] = false; // Mark as booked 
-    } 
+    void bookVehicle(const std::string& customerName, const std::string& type, const std::string& license, int duration, double rate, const std::string& rateType) {
+        std::lock_guard<std::mutex> lock(systemMutex);
+        if (!vehicleInventory[license]) throw std::runtime_error("Vehicle is already booked");
+
+        auto vehicle = VehicleFactory::createVehicle(type, license, rate);
+        auto rental = std::make_shared<Rental>(customerName, std::move(vehicle), duration, rateType);
+        rentals.push_back(rental);
+        vehicleInventory[license] = false;
+    }
 
     void returnVehicle(const std::string& license) {
-        std::lock_guard<std::mutex> lock(systemMutex); 
-        vehicleInventory[license] = true; // Mark as available 
-    } 
+        std::lock_guard<std::mutex> lock(systemMutex);
+        vehicleInventory[license] = true;
+    }
 
-    void printAllRentals() const { 
-        for (const auto& rental : rentals) { 
-            rental->printRentalDetails(); 
-        } 
-    } 
-}; 
+    void printAllRentals() const {
+        for (const auto& rental : rentals) rental->printRentalDetails();
+    }
+};
 
-// Static member initialization 
-std::unique_ptr<ReservationSystem> ReservationSystem::instance = nullptr; 
-std::mutex ReservationSystem::instanceMutex; 
+// Static member initialization
+std::unique_ptr<ReservationSystem> ReservationSystem::instance = nullptr;
+std::mutex ReservationSystem::instanceMutex;
 
-// Main Function 
-int main() { 
-    try { 
-        auto& system = ReservationSystem::getInstance(); 
+// Thread Function to Simulate Concurrent Bookings
+void simulateBooking(ReservationSystem& system, const std::string& customerName, const std::string& type, const std::string& license, int duration, double rate, const std::string& rateType) {
+    try {
+        system.bookVehicle(customerName, type, license, duration, rate, rateType);
+        std::cout << customerName << " successfully booked " << license << "\n";
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+    }
+}
 
-        // Adding vehicles to inventory 
-        system.addVehicle("ABC123"); 
-        system.addVehicle("XYZ789"); 
+// Main Function
+int main() {
+    try {
+        auto& system = ReservationSystem::getInstance();
 
-        // Booking vehicles 
-        system.bookVehicle("John Doe", "Car", "ABC123", 3, 50); 
-        system.bookVehicle("Jane Smith", "Truck", "XYZ789", 2, 75); 
+        // Add vehicles to inventory
+        system.addVehicle("ABC123");
+        system.addVehicle("XYZ789");
 
-        // Display all rentals 
-        std::cout << "Current Rentals:\n"; 
-        system.printAllRentals(); 
+        // Simulate concurrent bookings
+        std::thread t1(simulateBooking, std::ref(system), "Person A", "Car", "ABC123", 3, 50, "daily");
+        std::thread t2(simulateBooking, std::ref(system), "Person B", "Truck", "XYZ789", 2, 75, "daily");
 
-        // Returning a vehicle 
-        system.returnVehicle("ABC123"); 
-        std::cout << "\nVehicle ABC123 returned.\n"; 
+        t1.join();
+        t2.join();
 
-    } catch (const std::exception& ex) { 
-        std::cerr << "Error: " << ex.what() << "\n"; 
-    } 
-    return 0; 
+        // Print all rentals
+        std::cout << "\nCurrent Rentals:\n";
+        system.printAllRentals();
+
+        // Return a vehicle
+        system.returnVehicle("ABC123");
+        std::cout << "\nVehicle ABC123 returned.\n";
+
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+    }
+
+    return 0;
 }
