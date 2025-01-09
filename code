@@ -24,7 +24,7 @@ public:
 class Car : public Vehicle { 
 public:
     Car(const std::string& license, double rate) : Vehicle(license, rate) {} 
-    double calculateRentalFee(int duration) constoverride { 
+    double calculateRentalFee(int duration) const override { 
         return baseRate * duration; // Daily rental rate 
     } 
 }; 
@@ -45,9 +45,12 @@ public:
                                                   double rate) { 
         if (type == "Car") { 
             return std::make_unique<Car>(license, rate); 
-        } else if (type == "Truck") { 
+        } 
+        else if (type == "Truck") { 
             return std::make_unique<Truck>(license, rate); 
-        } throw std::invalid_argument("Invalid vehicle type"); 
+        } 
+        throw 
+            std::invalid_argument("Invalid vehicle type"); 
     } 
 }; 
 
@@ -88,7 +91,7 @@ public:
         if (!instance) { 
             instance.reset(new ReservationSystem()); 
         } 
-        return *instance; 
+        return *instance;  
 } 
 
     void addVehicle(const std::string& license) {
